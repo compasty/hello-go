@@ -1,10 +1,14 @@
 go 1.23.4
 
 use (
+    ./tutorial
     ./routines
     ./datatypes
     ./generics
     ./redis
     ./lissajous
     ./fileoper
+    ./flag
+    ./sonic
+    ./tempconv
 )
