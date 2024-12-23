@@ -15,4 +15,5 @@ use (
     ./popcount
     ./strings
     ./randoms
+    ./functions
 )
