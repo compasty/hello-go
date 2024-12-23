@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/compasty/hello-go/popcount"
 	"github.com/compasty/hello-go/tempconv"
@@ -47,9 +48,24 @@ func main() {
 	incr(p)
 	fmt.Printf("i = %d\n", i)
 	fmt.Printf("gcd(42, 24) = %d\n", gcd(42, 24))
+	// 引入包执行操作
 	t := 12.34
 	f := tempconv.Fahrenheit(t)
 	fmt.Printf("%s = %s\n", f, tempconv.FToC(f))
 	fmt.Printf("bits of %d = %d\n", 3, popcount.PopCount(3))
 	fmt.Printf("bits of %d = %d,%d,%d\n", 300, popcount.PopCount(300), popcount.PopCount2(300), popcount.PopCount3(300))
+	// 字符串操作
+	s1 := "hello, world"
+	fmt.Println(len(s1))      // "12"
+	fmt.Println(s1[0], s1[7]) // "104 119" ('h' and 'w')
+	fmt.Println(s1[:5])       // "hello"
+	// 字符串unicode编码
+	s2 := "hello, 世界"
+	fmt.Println(len(s2))                    // "13"
+	fmt.Println(utf8.RuneCountInString(s2)) // "9"
+	for i := 0; i < len(s2); {
+		r, size := utf8.DecodeRuneInString(s2[i:])
+		fmt.Printf("%d\t%c\n", i, r)
+		i += size
+	}
 }

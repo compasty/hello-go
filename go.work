@@ -13,4 +13,6 @@ use (
     ./tempconv
     ./structs
     ./popcount
+    ./strings
+    ./randoms
 )

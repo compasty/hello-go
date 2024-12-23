@@ -1,12 +1,23 @@
 # 基础拾遗
 
+## 类型
+
+1. 整型: int8/int16/int32/int64, uint8/uint16/uint32/uint64; int和uint类型是对应特定CPU平台机器字大小，长度不定。`rune`是和`int32`等价的类型，通常用于表示一个Unicode码点，`byte`是`uint8`的等价类型。
+
+> 很多时候即使数值本身不可能出现负数，也倾向于使用有符号的int类型，就像数组的长度一样。否则当我们逆序遍历时`for i := len(arr); i >= 0; i--`条件会永远为true。所以一般无符号整数一般用于位操作、哈希和加密操作等
+
+2. 浮点型：建议使用float64, 而不是float32, 因为float32的表示范围和精度相对较差
+
 ## 打印
 
 `fmt.Printf`格式化打印：
 
 1. `%T`: 用于显示一个值对应的数据类型
 2. `%t`: 是用于打印布尔型数据
-3. `%x`: 以十六进制的格式打印数组或slice全部的元素
+3. `%x`: 以十六进制的格式打印数组或slice全部的元素，`%#x`会增加`0x`前缀
+4. `%o`: 以八进制的格式打印, `%#o`会增加`0`前缀
+5. `%g`: 以紧凑的形式打印浮点数
+6. `%e`,`%f`: 以指数形式、小数形式打印浮点数，`%8.3f`表示打印宽度为8，精确为3
 
 ## 声明
 
@@ -47,6 +58,39 @@ _, ok = m[key]
 
 特殊的init函数：有些包级别的变量需要比较复杂的初始化，此时可以使用特殊的`init`函数进行初始化，
 
+## 字符串
+
+一个字符串是一个不可改变的字节序列。字符串可以包含任意的数据，包括byte值0，但是通常是用来包含人类可读的文本。文本字符串通常被解释为采用UTF8编码的Unicode码点（rune）序列。
+
+字符串是不可变的，所以尝试修改字符串内部结构的操作是被禁止的，执行`s[0]=L`会提示编译报错。不变性意味着如果两个字符串共享相同的底层数据的话也是安全的，这使得复制任何长度的字符串代价是低廉的。
+
+一个原生的字符串面值形式是`` `...` ``，使用反引号代替双引号。在原生的字符串面值中，没有转义操作；全部的内容都是字面的意思，包含退格和换行，因此一个程序中的原生字符串面值可能跨越多行（译注：在原生字符串面值内部是无法直接写`` ` ``字符的，可以用八进制或十六进制转义或`` +"`" ``连接字符串常量完成）。唯一的特殊处理是会删除回车以保证在所有平台上的值都是一样的，包括那些把回车也放入文本文件的系统（译注：Windows系统会把回车和换行一起放入文本文件中）。
+
+```go
+const GoUsage = `Go is a tool for managing Go source code.
+
+Usage:
+    go command [arguments]
+...`
+```
+
+### Unicode编码
+
+目前Unicode标准里收集了超过120,000个字符，涵盖超过100多种语言。这些在计算机程序和数据中是如何体现的呢？通用的表示一个Unicode码点的数据类型是int32，也就是Go语言中rune对应的类型；它的同义词`rune`符文正是这个意思。我们可以将一个符文序列表示为一个int32序列。这种编码方式叫UTF-32或UCS-4，每个Unicode码点都使用同样大小的32bit来表示。这种方式比较简单统一，但是它会浪费很多存储空间。UTF8是一个将Unicode码点编码为字节序列的变长编码, 可以很好的节省空间，兼容ASCII编码，但是无法直接通过索引访问第n个字符。
+
+Go语言的源文件采用UTF8编码，并且Go语言处理UTF8编码的文本也很出色。unicode包提供了诸多处理rune字符相关功能的函数（比如区分字母和数字，或者是字母的大写和小写转换等），unicode/utf8包则提供了用于rune字符序列的UTF8编码和解码的功能。例如，下面的字符串面值都表示相同的值
+
+```
+"世界"
+"\xe4\xb8\x96\xe7\x95\x8c"
+"\u4e16\u754c"
+"\U00004e16\U0000754c"
+```
+
+
+```go
+
+```
 
 
 # 复合数据类型
@@ -74,6 +118,8 @@ r := [...]int{99: -1}
 数组作为参数传值时，GO语言会复制一个数组赋值给函数内部的参数变量，而不是传递指针或者引用。我们可以显式地传入一个数组指针，那样的话函数通过指针对数组的任何修改都可以直接反馈到调用者。
 
 ## slice
+
+# 函数
 
 # 面向对象
 
@@ -109,6 +155,71 @@ f()    // call f(); wait for it to return
 go f() // create a new goroutine that calls f(); don't wait
 ```
 
+# 测试
+
+## go test命令
+
+`go test`命令是一个按照一定的约定和组织来测试代码的程序，在包目录内所有以 `_test.go`为后缀的文件在执行`go build`时不会被构建成包的一部分，而是`go test`的一部分。
+
+在 `*_test.go`文件中，有三种类型的函数：测试函数、基准测试（benchmark）函数、示例函数。一个测试函数是以Test为函数名前缀的函数，用于测试程序的一些逻辑行为是否正确；go test命令会调用这些测试函数并报告测试结果是PASS或FAIL。基准测试函数是以Benchmark为函数名前缀的函数，它们用于衡量一些函数的性能；go test命令会多次运行基准测试函数以计算一个平均的执行时间。示例函数是以Example为函数名前缀的函数，提供一个由编译器保证正确性的示例文档
+
+go test命令会遍历所有的*_test.go文件中符合上述命名规则的函数，生成一个临时的main包用于调用相应的测试函数，接着构建并运行、报告测试结果，最后清理测试中生成的临时文件。
+
+`go test -v`命令可用于打印每个函数的名字和运行时间
+`go test -run=`命令可以指定一个正则，只有测试名被正确匹配的测试函数才会被执行
+
+## 测试函数编写
+
+所有的测试函数必须导入`testing`包。
+
+```go
+func TestName(t *testing.T) {}
+```
+
+通常我们会在测试函数中使用 `t.Error`, `t.Errorf`, `t.Fatal`, `t.Fatalf`等函数描述错误信息。两者的区别是：`t.Errorf`调用也没有引起panic异常或停止测试的执行。即使前面的数据导致了测试的失败，依然会运行后续的测试, 而使用`t.Fatal`或`t.Fatalf`会停止当前测试函数。它们必须在和测试函数同一个goroutine内调用。
+
+测试失败的信息一般形式是“f(x) = y, want z”，其中f(x)解释了失败的操作和对应的输入，y是实际的运行结果，z是期望的正确的结果
+
+示例：
+```go
+func TestPalindrome(t *testing.T) {
+    if !IsPalindrome("detartrated") {
+        t.Error(`IsPalindrome("detartrated") = false`)
+    }
+    if IsPalindrome("palindrome") {
+        t.Error(`IsPalindrome("palindrome") = true`)
+    }
+}
+```
+
+建议使用表格驱动的测试，容器添加测试数据
+```go
+func TestIsPalindrome(t *testing.T) {
+    var tests = []struct {
+        input string
+        want  bool
+    }{
+        {"", true},
+        {"a", true},
+        {"aa", true},
+        {"A man, a plan, a canal: Panama", true},
+        {"Evil I did dwell; lewd did I live.", true},
+        {"Able was I ere I saw Elba", true},
+        {"été", true},
+        {"Et se resservir, ivresse reste.", true},
+        {"palindrome", false}, // non-palindrome
+        {"desserts", false},   // semi-palindrome
+    }
+    for _, test := range tests {
+        if got := IsPalindrome(test.input); got != test.want {
+            t.Errorf("IsPalindrome(%q) = %v", test.input, got)
+        }
+    }
+}
+```
+
+
+
 # 常用包
 
 ## os包
@@ -128,6 +239,18 @@ os包以跨平台的方式，提供了一些与操作系统交互的函数和变
 
 ## flag包
 
+
+## math包
+
+### 随机数
+
+初始化一个随机数生成器, 以时间作为seed
+
+```go
+seed := time.Now().UTC().UnixNano()
+rng := rand.New(rand.NewSource(seed))
+rng.Intn(100) // 生成[0,100)的随机整数，
+```
 
 
 
