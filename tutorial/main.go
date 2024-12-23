@@ -14,5 +14,5 @@ func main() {
 	// }
 	// fmt.Println(s)
 	// 改进版本写法
-	fmt.Println(strings.Join(os.Args[1:], " "))
+	fmt.Println(strings.Join(os.Args[:], " "))
 }

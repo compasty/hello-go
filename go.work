@@ -1,8 +1,10 @@
-go 1.21.1
+go 1.23.4
 
 use (
     ./routines
     ./datatypes
     ./generics
     ./redis
+    ./lissajous
+    ./fileoper
 )
