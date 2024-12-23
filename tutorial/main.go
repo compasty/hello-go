@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/compasty/hello-go/popcount"
 	"github.com/compasty/hello-go/tempconv"
 )
 
@@ -49,4 +50,6 @@ func main() {
 	t := 12.34
 	f := tempconv.Fahrenheit(t)
 	fmt.Printf("%s = %s\n", f, tempconv.FToC(f))
+	fmt.Printf("bits of %d = %d\n", 3, popcount.PopCount(3))
+	fmt.Printf("bits of %d = %d,%d,%d\n", 300, popcount.PopCount(300), popcount.PopCount2(300), popcount.PopCount3(300))
 }

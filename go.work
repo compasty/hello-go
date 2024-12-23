@@ -11,4 +11,6 @@ use (
     ./flag
     ./sonic
     ./tempconv
+    ./structs
+    ./popcount
 )
