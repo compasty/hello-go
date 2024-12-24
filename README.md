@@ -185,6 +185,16 @@ x, err := strconv.Atoi("123")             // x is an int
 y, err := strconv.ParseInt("123", 10, 64) // base 10, up to 64 bits
 ```
 
+### 字符串拼接
+
+在go中有很多种方式进行字符串拼接：
+1. 使用连接运算符：s = "Hello," + s
+2. 使用`fmt.Sprintf`进行格式化拼接：`fmt.Sprintf("[name]: %s; [age]: %d", s1, s2)`
+3. 使用`bytes.Buffer`，可以使用`Grow`方法来预分配内存空间的大小，减少后期的缓冲区扩容操作，`Reset`方法可以清空缓存区
+4. 使用`strings.Builder`，同样有`Grow`方法
+
+从性能角度，建议选择4。
+
 ## 常量
 
 常量都是在编译期计算，而不是运行期。
@@ -242,6 +252,78 @@ r := [...]int{99: -1}
 
 ## slice
 
+slice表示变长的序列，序列中元素的类型相同，一般写作 `[]T`。slice是一个轻量级的数据结构，底层引用一个数组对象，一个slice有三个部分组成：一个slice由三个部分构成：指针、长度和容量。指针指向第一个slice元素对应的底层数组元素的地址，要注意的是 **slice的第一个元素并不一定就是数组的第一个元素**。长度对应slice中元素的数目；长度不能超过容量，容量一般是从slice的开始位置到底层数据的结尾位置。内置的len和cap函数分别返回slice的长度和容量。
+
+多个slice之间可以共享底层数据，并且引用的数组部分区间可能重叠。
+
+![slice-01](images/slice01.png)
+
+```go
+months := [...]string{1: "January", /* ... */, 12: "December"}
+
+summer := months[6:9]
+fmt.Println(summer[:20]) // panic: out of range
+
+// 这是允许的，因为没有超出cap
+endlessSummer := summer[:5] // extend a slice (within capacity)
+fmt.Println(endlessSummer)  // "[June July August September October]"
+```
+
+> 注意：字符串的切片操作（注意是底层字节序列，不是unicode点序列）和`[]byte`的切片是类似的
+
+因为slice值包含指向第一个slice元素的指针，因此向函数传递slice将允许在函数内部修改底层数组的元素。换句话说，复制一个slice只是对底层的数组创建了一个新的slice别名。例如借助这个实现数组的翻转：
+
+```go
+func reverse(s []int) {
+    for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+        s[i], s[j] = s[j], s[i]
+    }
+}
+
+a := [...]int{0, 1, 2, 3, 4, 5}
+reverse(a[:])
+fmt.Println(a) // "[5 4 3 2 1 0]"
+```
+
+需要注意slice类型的变量和数组类型变量初始化的差异，**slice初始化的时候没有指明序列的长度**，底层会隐式创建一个合适大小的数组，然后slice的指针指向底层的数组。
+
+```go
+a := [...]int{0,1,2,3} // 数组初始化
+s := []int{0,1,2,3} // 切片初始化
+```
+
+和数组不同的是，slice之间不能比较，不能使用`==`。对于字节型slice的判断可以使用高度优化过的 `bytes.Equal`函数，其他类型只能自己写函数逐个比较。slice唯一合法的比较操作是和 `nil`比较，例如：`if s == nil {}`。一个零值的slice等于nil。一个nil值的slice并没有底层数组。一个nil值的slice的长度和容量都是0，但是也有非nil值的slice的长度和容量也是0的，例如 `[]int{}`或`make([]int, 3)[3:]`。如果测试一个slice是否为空，应该使用`len(s)==0`,而不是`s == nil`。
+
+### make函数
+
+可以使用内置的`make`函数创建一个指定元素类型、长度和容量的slice。容量部分可以省略，在这种情况下，容量将等于长度。在底层，make创建了一个匿名的数组变量，然后返回一个slice；只有通过返回的slice才能引用底层匿名的数组变量。在第一种语句中，slice是整个数组的view。在第二个语句中，slice只引用了底层数组的前len个元素，但是容量将包含整个的数组。额外的元素是留给未来的增长用的。
+
+```go
+make([]T, len)
+make([]T, len, cap) // same as make([]T, cap)[:len]
+```
+
+### append函数
+
+内置的`append`函数可以用于向slice追加元素，其内存扩展策略比较复杂（但一般来说有足够容量时直接设值，否则进行扩容然后复制迁移），所以通常我们并不知道append调用是否导致了内存的重新分配，因此我们也不能确认新的slice和原始的slice是否引用的是相同的底层数组空间。同样，我们不能确认在原先的slice上的操作是否会影响到新的slice。因此，通常是将append返回的结果直接赋值给输入的slice变量，例如：`runes = append(runes, r)`
+
+### copy函数
+
+内置函数 `copy()`可以将一个切片复制到另外一个切片中，其函数签名为：`func copy(dst, src []Type) int`, 会将`src`切片中的元素复制到`dst`中,复制长度以`len(src)`和`len(dst)`的最小值为准。它返回复制的元素个数。
+
+```go
+slice1 := []int{1, 2, 3, 4, 5}
+slice2 := []int{5, 4, 3}
+copy(slice2, slice1) // 只会复制slice1的前3个元素到slice2中
+copy(slice1, slice2) // 只会复制slice2的3个元素到slice1的前3个位置
+```
+
+
+
+
+### 内存技巧
+
+
 # 函数
 
 ## 函数基础
@@ -276,9 +358,6 @@ func (p Point) Distance(q Point) float64 {
 上面代码中附加的参数p, 叫做方法的接收器（receiver）。Go语言中不像其他语言使用`this`或者`self`作为接收器，而是可以任意选择名字，但是为了一致性和简短性，通常建议是选择类型的第一个字母。
 
 
-
-
-
 # GO并发基础
 
 ## goroutines && channels
@@ -290,6 +369,20 @@ GO语言中每一个并发的执行单元叫作一个goroutine。当一个程序
 f()    // call f(); wait for it to return
 go f() // create a new goroutine that calls f(); don't wait
 ```
+
+# 泛型
+
+Go1.18之后开始支持泛型，通过引入类型形参和实参。
+
+```go
+func Add[T int | int32 | float64 | string] (a, b T) T {
+  return a + b
+}
+
+// 使用
+type MySlice[T int | int32 | float32] []T
+```
+
 
 # 测试
 

@@ -41,6 +41,24 @@ func TestToupper(t *testing.T) {
 	}
 }
 
+func TestJoin(t *testing.T) {
+	var tests = []struct {
+		s    []string
+		want string
+	}{
+		{[]string{"a", "b", "c"}, "a,b,c"},
+		{[]string{"Hello", "我们", "の", "world"}, "Hello,我们,の,world"},
+	}
+	for _, test := range tests {
+		if Join1(test.s, ",") != test.want {
+			t.Errorf("Join1 failed")
+		}
+		if Join2(test.s, ",") != test.want {
+			t.Errorf("Join2 failed")
+		}
+	}
+}
+
 func TestIsPalindrome(t *testing.T) {
 	var tests = []struct {
 		s    string
@@ -77,3 +95,9 @@ func TestIsPalindrome2(t *testing.T) {
 		}
 	}
 }
+
+// func TestStringSlice(t *testing.T) {
+// 	s := "H世界"
+// 	s2 := s[1:4]
+// 	fmt.Println(s2)
+// }
