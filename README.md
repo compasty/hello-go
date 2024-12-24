@@ -87,11 +87,134 @@ Go语言的源文件采用UTF8编码，并且Go语言处理UTF8编码的文本�
 "\U00004e16\U0000754c"
 ```
 
+`len`函数得到的是字符串占用的字节长度，如果需要关注实际的字符数量可以使用`utf8.RuneCountInString`。我们也可以借助 `unicode/utf8` 进行对应字符的遍历，当然最简单的方式是直接借助`range`循环，底层会自动隐式解码UTF8字符串。
 
 ```go
+import "unicode/utf8"
 
+s := "Hello, 世界"
+fmt.Println(len(s))                    // "13"
+fmt.Println(utf8.RuneCountInString(s)) // "9"
+// 借助unicode/utf8包进行遍历
+for i := 0; i < len(s); {
+    // DecodeRuneInString函数都返回一个r和长度，r对应字符本身，长度对应r采用UTF8编码后的编码字节数目
+    r, size := utf8.DecodeRuneInString(s[i:])
+    fmt.Printf("%d\t%c\n", i, r)
+    i += size
+}
+for i, r := range s {
+    fmt.Printf("%d\t%q\t%d\n", i, r, r)
+}
 ```
 
+UTF8字符串作为交换格式的时候十分方便，但是在程序中很多时候转换为rune序列更加方便，因为rune大小一致，支持数组索引和方便切割。
+
+```go
+s := "プログラム"
+//% x中用于在每个十六进制数字前插入空格
+fmt.Printf("% x\n", s) // "e3 83 97 e3 83 ad e3 82 b0 e3 83 a9 e3 83 a0"
+// []rune和string直接相互转换
+r := []rune(s)
+fmt.Printf("%x\n", r)  // "[30d7 30ed 30b0 30e9 30e0]"
+s2 = string(r)
+```
+
+### 字符串处理
+
+标准库中有四个包对字符串处理尤为重要：bytes、strings、strconv和unicode包。
+
+strings包提供了许多如字符串的查询、替换、比较、截断、拆分和合并等功能。
+
+bytes包也提供了很多类似功能的函数，但是针对和字符串有着相同结构的[]byte类型。因为字符串是只读的，因此逐步构建字符串会导致很多分配和复制。在这种情况下，使用bytes.Buffer类型将会更有效。
+
+strconv包提供了布尔型、整型数、浮点数和对应字符串的相互转换，还提供了双引号转义相关的转换。
+
+unicode包提供了IsDigit、IsLetter、IsUpper和IsLower等类似功能，它们用于给字符分类。每个函数有一个单一的rune类型的参数，然后返回一个布尔值。而像ToUpper和ToLower之类的转换函数将用于rune字符的大小写转换。所有的这些函数都是遵循Unicode标准定义的字母、数字等分类规范。strings包也有类似的函数，它们是ToUpper和ToLower，将原始字符串的每个字符都做相应的转换，然后返回新的字符串。
+
+字符串是只读的，一旦创建不可改变，但是字节slice或者rune slice则可以自由的修改。字符串和字节slice之间的转换：
+
+```go
+s := "abc"
+b := []byte(s)
+s2 := string(b)
+```
+
+从概念上讲，一个[]byte(s)转换是 **分配了一个新的字节数组用于保存字符串数据的拷贝**，然后引用这个底层的字节数组。编译器的优化可以避免在一些场景下分配和复制字符串数据，但总的来说需要确保在变量b被修改的情况下，原始的s字符串也不会改变。将一个字节slice转换到字符串的string(b)操作则是构造一个字符串拷贝，以确保s2字符串是只读的。
+
+为了避免转换中不必要的内存分配，`bytes`包和`strings`包提供了很多使用的函数。
+
+```go
+// strings包中
+func Contains(s, substr string) bool
+func Count(s, sep string) int
+func Fields(s string) []string
+func HasPrefix(s, prefix string) bool
+func Index(s, sep string) int
+func Join(a []string, sep string) string
+// bytes包中的
+func Contains(b, subslice []byte) bool
+func Count(s, sep []byte) int
+func Fields(s []byte) [][]byte
+func HasPrefix(s, prefix []byte) bool
+func Index(s, sep []byte) int
+func Join(s [][]byte, sep []byte) []byte
+```
+
+`bytes`包还提供了Buffer类型用于字节slice的缓存。一个Buffer开始是空的，但是随着string、byte或[]byte等类型数据的写入可以动态增长，一个bytes.Buffer变量并不需要初始化，因为零值也是有效的。
+
+### 字符串和数字的转换
+
+字符串和数字之间的转换一般由 `strconv`包提供。
+
+将一个整数转为字符串，一种方法是用`fmt.Sprintf`返回一个格式化的字符串；另一个方法是用 `strconv.Itoa()`。`strconv`包的`FormatInt`和`FormatUint`函数可以用不同的进制来格式化数字
+
+```go
+x := 123
+fmt.Sprintf("%d", x)
+strconv.Itoa(x)
+
+fmt.Println(strconv.FormatInt(int64(x), 2)) // "1111011"
+// 当然用%b,%o,%x更方便
+s := fmt.Sprintf("x=%b", x) // "x=1111011"
+```
+
+如果要将一个字符串解析为整数，可以使用`strconv`包的`Atoi`或`ParseInt`函数，还有用于解析无符号整数的`ParseUint`函数。ParseInt函数的第三个参数是用于指定整型数的大小；例如16表示int16，0则表示int。在任何情况下，返回的结果y总是int64类型，你可以通过强制类型转换将它转为更小的整数类型。
+
+```go
+x, err := strconv.Atoi("123")             // x is an int
+y, err := strconv.ParseInt("123", 10, 64) // base 10, up to 64 bits
+```
+
+## 常量
+
+常量都是在编译期计算，而不是运行期。
+
+常量声明可以使用iota常量生成器初始化，它用于生成一组以相似规则初始化的常量，但是不用每行都写一遍初始化表达式。在一个const声明语句中，在第一个声明的常量所在的行，iota将会被置为0，然后在每一个有常量声明的行加一。
+
+```go
+type Weekday int
+
+const (
+    Sunday Weekday = iota
+    Monday
+    Tuesday
+    Wednesday
+    Thursday
+    Friday
+    Saturday
+)
+
+type Flags uint
+
+// 也可以在常量表达式中使用iota
+const (
+    FlagUp Flags = 1 << iota // is up
+    FlagBroadcast            // supports broadcast access capability
+    FlagLoopback             // is a loopback interface
+    FlagPointToPoint         // belongs to a point-to-point link
+    FlagMulticast            // supports multicast access capability
+)
+```
 
 # 复合数据类型
 

@@ -1,6 +1,10 @@
 package strings
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
 
 func TestHasPrefix(t *testing.T) {
 	if !HasPrefix("Hello, world", "Hello") {
@@ -11,6 +15,29 @@ func TestHasPrefix(t *testing.T) {
 func TestHasSuffix(t *testing.T) {
 	if !HasSuffix("Hello, world", "world") {
 		t.Error(`HasSuffix("Hello, world", "world") = false, want true`)
+	}
+}
+
+func TestBasename(t *testing.T) {
+	var tests = []struct {
+		s    string
+		want string
+	}{
+		{"a" + string(os.PathSeparator) + "b" + string(os.PathSeparator) + "c.go", "c"},
+		{"c.d.go", "c.d"},
+		{"abc", "abc"},
+	}
+	for _, test := range tests {
+		if got := Basename(test.s); got != test.want {
+			t.Errorf("Basename(%q) = %q", test.s, got)
+		}
+	}
+}
+
+func TestToupper(t *testing.T) {
+	// Test the toupper function.
+	if strings.ToUpper("aBc") != "ABC" {
+		t.Errorf("toupper('aBc') != \"ABC")
 	}
 }
 

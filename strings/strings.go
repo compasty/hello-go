@@ -1,6 +1,12 @@
 package strings
 
-import "unicode"
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"strings"
+	"unicode"
+)
 
 func HasPrefix(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
@@ -8,6 +14,50 @@ func HasPrefix(s, prefix string) bool {
 
 func HasSuffix(s, suffix string) bool {
 	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
+}
+
+func Basename(s string) string {
+	slash := strings.LastIndex(s, string(os.PathSeparator))
+	s = s[slash+1:]
+	if dot := strings.LastIndex(s, "."); dot >= 0 {
+		s = s[:dot]
+	}
+	return s
+}
+
+func IntsToString(values []int) string {
+	var buf bytes.Buffer
+	buf.WriteByte('[')
+	for i, v := range values {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		fmt.Fprintf(&buf, "%d", v)
+	}
+	buf.WriteByte(']')
+	return buf.String()
+}
+
+func Join1(values []string, sep string) string {
+	var buf strings.Builder
+	for i, v := range values {
+		if i > 0 {
+			buf.WriteString(sep)
+		}
+		buf.WriteString(v)
+	}
+	return buf.String()
+}
+
+func Join2(values []string, sep string) string {
+	var buf bytes.Buffer
+	for i, v := range values {
+		if i > 0 {
+			buf.WriteString(sep)
+		}
+		buf.WriteString(v)
+	}
+	return buf.String()
 }
 
 // IsPalindrome reports whether s reads the same forward and backward.

@@ -1,6 +1,8 @@
 package functions
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestCommons(t *testing.T) {
 	// Test the hypotenuse function.
