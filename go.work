@@ -16,4 +16,5 @@ use (
     ./strings
     ./randoms
     ./functions
+    ./times
 )

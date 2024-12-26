@@ -18,6 +18,7 @@
 4. `%o`: 以八进制的格式打印, `%#o`会增加`0`前缀
 5. `%g`: 以紧凑的形式打印浮点数
 6. `%e`,`%f`: 以指数形式、小数形式打印浮点数，`%8.3f`表示打印宽度为8，精确为3
+7. `%v`: 以默认格式输出变量，`%+v`: 对结构体加字段名的方式输出，`%#v`: 以 Go 语法格式化输出
 
 ## 声明
 
@@ -318,11 +319,44 @@ copy(slice2, slice1) // 只会复制slice1的前3个元素到slice2中
 copy(slice1, slice2) // 只会复制slice2的3个元素到slice1的前3个位置
 ```
 
+## map
 
+map底层是哈希表结构，是**无序**的key/value对的集合，其中key必须是支持 `==` 比较运算符的数据类型以保证可以测试key是否相等（因此不建议使用浮点数作为key）
 
+可以使用key对应的元素，使用`delete`函数删除对应的元素。所有这些操作是安全的，即使这些元素不在map中也没有关系；如果一个查找失败将返回value类型对应的零值，例如，即使map中不存在“bob”下面的代码也可以正常工作，因为ages["bob"]失败时将返回0。
 
-### 内存技巧
+```go
+ages["bob"] = ages["bob"] + 1 // happy birthday!
+```
 
+> map中的元素不是一个变量，因此无法对map的元素进行取址操作，例如 `&ages['bob']`会报错
+
+map的遍历&判断key是否存在的操作：
+
+```go
+// 遍历
+for k, v := range m {}
+// 获取
+age, ok := ages["bob"]
+if !ok { // bob not in map }
+// 或者结合使用
+if age, ok := ages["bob"]; !ok { /* ... */ }
+```
+
+map的迭代顺序是不确定的，不同的哈希实现可能导致不同的遍历顺序。如果需要强制按顺序遍历key/value对，必须显式的对key进行排序，例如使用`sort`包。
+
+```go
+import "sort"
+// 预先设定大小
+names := make([]string, 0, len(ages))
+for name := range ages {
+    names = append(names, name)
+}
+sort.Strings(names)
+for _, name := range names {}
+```
+
+map可以和 `nil` 比较，但是不能相互间不能进行相等比较。
 
 # 函数
 
@@ -341,7 +375,110 @@ func name(parameter-list) (result-list) {
 
 # 面向对象
 
-一个对象其实也就是一个简单的值或者一个变量，在这个对象中会包含一些方法，而一个方法则是一个和特殊类型关联的函数。一个面向对象的程序会用方法来表达其属性和对应的操作，这样使用这个对象的用户就不需要直接去操作对象，而是借助方法来做这些事情。
+一个对象其实也就是一个简单的值或者一个变量，在这个对象中会包含一些方法，而一个方法则是一个和特殊类型关联的函数。一个面向对象的程序会用方法来表达其属性和对应的操作，这样使用这个对象的用户就不需要直接去操作对象，而是借助方法来做这些事情
+
+## 结构体基础
+
+结构体的变量使用点操作符进行访问，点操作符也可以和指向结构体的指针一起工作。结构体类型的零值是每个成员都是零值。通常会将零值作为最合理的默认值。
+
+```go
+var e1 *Employee = &dilbert;
+e1.Position = "Senior" // 与(*e1).Position = "Senior"等价
+
+func EmployeeByID(id int) *Employee { /* ... */ }
+EmployeeByID(id).Salary = 0 // fired for... no real reason
+```
+
+> 将EmployeeByID函数的返回值从*Employee指针类型改为Employee值类型，那么更新语句将不能编译通过，因为在赋值语句的左边并不确定是一个变量（ **调用函数返回的是值，并不是一个可取地址的变量** ）
+
+如果结构体成员名字是以大写字母开头的，那么该成员就是导出的；这是Go语言导出规则决定的。一个结构体可能同时包含导出和未导出的成员。
+
+一个命名为S的结构体类型将不能再包含S类型的成员：因为一个聚合的值不能包含它自身。（该限制同样适用于数组。）但是S类型的结构体可以包含`*S`指针类型的成员。
+
+```go
+type tree struct {
+    value       int
+    left, right *tree
+}
+```
+
+### 结构体字面值
+
+结构体字面值可以指定每个成员的值，一般有两种写法以成员结构体定义的顺序指定，需要记住记住结构体的每个成员的类型和顺序，所以一般只在定义结构体的包内部使用，或者是在较小的结构体中使用，这些结构体的成员排列比较规则，比如 `image.Point{x, y}` 或`color.RGBA{red, green, blue, alpha}`；另一种写法就是以成员名字和相应的值初始化, 这种形式下如果成员被忽略的话将默认用零值。
+
+```go
+p := Point{1, 2}
+anim := gif.GIF{LoopCount: nframes}
+```
+
+### 结构体与函数
+
+1. 结构体可以作为函数的参数和返回值，但是考虑效率的话较大的结构体通常会用指针的方式传入和返回。
+2. 需要在函数内部修改结构体成员的话，也是需要指针传入
+
+```go
+func Scale(p Point, factor int) Point {
+    return Point{p.X * factor, p.Y * factor}
+}
+func Bonus(e *Employee, percent int) int {
+    return e.Salary * percent / 100
+}
+// modify member values
+func AwardAnnualRaise(e *Employee) {
+    e.Salary = e.Salary * 105 / 100
+}
+```
+
+### 结构体比较
+
+如果结构体的全部成员都是可以比较的，那么结构体也是可以比较的，那样的话两个结构体将可以使用==或!=运算符进行比较。相等比较运算符==将比较两个结构体的每个成员，因此下面两个比较的表达式是等价的。**对于可比较的结构体，可以作为map的key类型。**
+
+```go
+type address struct {
+    hostname string
+    port     int
+}
+
+hits := make(map[address]int)
+```
+
+### 匿名成员
+
+Go语言有一个特性让我们只声明一个成员对应的数据类型而不指名成员的名字；这类成员就叫匿名成员。匿名成员的数据类型必须是命名的类型或指向一个命名的类型的指针。得益于匿名嵌入的特性，我们可以直接访问叶子属性而不需要给出完整的路径。
+
+匿名成员并不是真的无法访问了。其中匿名成员Circle和Point都有自己的名字——就是命名的类型名字——但是这些名字在点操作符中是可选的。我们在访问子成员的时候可以忽略任何匿名成员部分。
+
+```go
+// before
+type Point struct {
+    X, Y int
+}
+
+type Circle struct {
+    Center Point
+    Radius int
+}
+c.Center.X = 5
+// after
+type Circle struct {
+    Point
+    Radius int
+}
+
+c.X = 8 // 等价于 c.Point.X = 8
+```
+
+结构体字面值并没有简短表示匿名成员的语法，必须遵循类型声明时候的结构。
+
+```go
+c = Circle{X: 8, Y: 8, Radius: 5} // compile error: unknown fields
+c = Circle{
+    Point:  Point{X: 8, Y: 8},
+    Radius: 5,
+}
+```
+
+> 不能同时包含两个类型相同的匿名成员，这会导致名字冲突
 
 ## 方法基础
 
@@ -357,6 +494,9 @@ func (p Point) Distance(q Point) float64 {
 
 上面代码中附加的参数p, 叫做方法的接收器（receiver）。Go语言中不像其他语言使用`this`或者`self`作为接收器，而是可以任意选择名字，但是为了一致性和简短性，通常建议是选择类型的第一个字母。
 
+# 接口
+
+GO语言提供了接口类型，这是一种抽
 
 # GO并发基础
 
@@ -449,48 +589,9 @@ func TestIsPalindrome(t *testing.T) {
 
 # 反射
 
-Go语言提供了一种机制，能够在运行时更新变量和检查它们的值、调用它们的方法和它们支持的内在操作，而不需要在编译时就知道这些变量的具体类型。这种机制被称为反射。
+Go语言提供了一种机制，能够在运行时更新变量和检查它们的值、调用它们的方法和它们支持的内在操作，而不需要在编译时就知道这些变量的具体类型。这种机制被称为反射。反射是由 `reflect`包提供的，定义了两个重要类型: `Type` 和 `Value`。一个`Type`表示一个Go类型。它是一个接口，有许多方法来区分类型以及检查它们的组成部分，例如一个结构体的成员或一个函数的参数等。唯一能反映 `reflect.Type` 实现的是接口的类型描述信息，也正是这个实体标识了接口值的动态类型。
 
-
-
-# 常用包
-
-## os包
-
-os包以跨平台的方式，提供了一些与操作系统交互的函数和变量。
-1. 程序的命令行参数可从 os 包的 Args 变量获取, `os.Args` 变量是字符串的切片（slice），其中 `os.Args[0]`是命令本身的名字，其他的元素是程序启动时传递的参数。
-
-## strings包
-
-1. `strings.Join`函数：连接数组或者切片形成新的字符串
-
-## bufio包
-
-这个包的核心作用是利用缓冲区减少IO操作次数，提升读写性能。
-
-1. `bufio.NewScanner`: 
-
-## flag包
-
-## time包
-
-## math包
-
-### 随机数
-
-初始化一个随机数生成器, 以时间作为seed
-
-```go
-seed := time.Now().UTC().UnixNano()
-rng := rand.New(rand.NewSource(seed))
-rng.Intn(100) // 生成[0,100)的随机整数，
-```
-
-## net/http包
-
-`net/http`包提供了HTTP客户端和服务端的实现
-
-## net/url包
+函数 `reflect.TypeOf` 接受任意的 `interface{}` 类型，并以 `reflect.Type` 形式返回其动态类型
 
 
 # 模块管理
