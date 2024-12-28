@@ -510,6 +510,8 @@ f()    // call f(); wait for it to return
 go f() // create a new goroutine that calls f(); don't wait
 ```
 
+主函数返回时，所有的goroutine都会被直接打断，程序退出。除了 **从主函数退出或者直接终止程序**之外，没有其它的编程方法能够让一个goroutine来打断另一个的执行。
+
 # 泛型
 
 Go1.18之后开始支持泛型，通过引入类型形参和实参。

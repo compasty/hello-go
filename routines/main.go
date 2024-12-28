@@ -6,10 +6,10 @@ import (
 )
 
 func main() {
-	go spinner(100 * time.Millisecond)
-	const n = 45
-	fibN := fib(n) // slow function
-	fmt.Printf("\rFibonacci(%d) = %d\n", n, fibN)
+	go spinner(200 * time.Millisecond)
+	go fib(40)
+	time.Sleep(10 * time.Second)
+	fmt.Printf("All done")
 }
 
 func spinner(delay time.Duration) {
@@ -21,9 +21,15 @@ func spinner(delay time.Duration) {
 	}
 }
 
-func fib(x int) int {
+func fib(x int) {
+	for i := 1; i <= x; i++ {
+		fmt.Printf("fib(%d)=%d\n", i, fib0(i))
+	}
+}
+
+func fib0(x int) int {
 	if x < 2 {
 		return x
 	}
-	return fib(x-1) + fib(x-2)
+	return fib0(x-1) + fib0(x-2)
 }
