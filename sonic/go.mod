@@ -1,6 +1,6 @@
 module github.com/compasty/hello-go/sonic
 
-go 1.23.4
+go 1.21.13
 
 require (
 	github.com/bytedance/sonic v1.12.6 // indirect

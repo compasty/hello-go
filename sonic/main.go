@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/bytedance/sonic"
 )
@@ -48,6 +49,13 @@ func main() {
 	}
 	fmt.Printf("unjson: %+v\n", um)
 
+	var o = map[string]interface{}{}
+	var r = strings.NewReader(`{"a":"b"}{"1":"2"}`)
+	var dec = sonic.ConfigDefault.NewDecoder(r)
+	dec.Decode(&o)
+	dec.Decode(&o)
+	fmt.Printf("%+v\n", o)
+
 	// 使用encoding/json库
 	// Marshal返回一个编码后的字节slice
 	data, err := json.Marshal(movies)
@@ -74,4 +82,13 @@ func main() {
 		log.Println(err)
 	}
 	fmt.Printf("json: %+v\n", string(byt))
+
+	var m2 = make(map[string]interface{})
+	var r2 = strings.NewReader(`{"a":"b"}{"1":"2"}{"k1":"v1"}`)
+	var dec2 = json.NewDecoder(r2)
+	dec2.Decode(&m2)
+	dec2.Decode(&m2)
+	dec2.Decode(&m2)
+	// dec.Decode(&o)
+	fmt.Printf("%+v\n", m2)
 }

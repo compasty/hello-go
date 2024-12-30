@@ -67,5 +67,39 @@ func TestCreateTime(t *testing.T) {
 }
 
 func TestParseTime(t *testing.T) {
+	layout := "2006-01-02 15:04:05"
+	str := "2021-08-01 12:30:23"
+	t1, err1 := time.Parse(layout, str)
+	if err1 != nil {
+		fmt.Println(err1)
+	}
+	// 需要注意的是，time.Parse() 默认的是 UTC
+	fmt.Println(t1)
+	// time.ParseInLocation() 可以指定时区
+	t2, err2 := time.ParseInLocation(layout, str, time.Local)
+	if err2 != nil {
+		fmt.Println(err2)
+	}
+	fmt.Println(t2)
+}
 
+func TestDuration(t *testing.T) {
+	now := time.Now()
+	fmt.Println(now)
+
+	// 1小时1分1s之后
+	t1, _ := time.ParseDuration("1h1m1s")
+	fmt.Println(t1)
+	m1 := now.Add(t1)
+	fmt.Println(m1)
+	// 3小时以前
+	t2, _ := time.ParseDuration("-1h")
+	m2 := now.Add(t2 * 3)
+	fmt.Println(m2)
+	// Sub 计算两个时间差
+	sub1 := now.Sub(m2)
+	fmt.Println(sub1.Hours())   // 相差小时数，3
+	fmt.Println(sub1.Minutes()) // 相差分钟数，180
+	// 仅支持时，分，秒，毫秒，纳秒等，不支持天
+	// t3, _ := time.ParseDuration("1d1h")
 }

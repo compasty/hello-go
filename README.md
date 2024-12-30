@@ -401,7 +401,90 @@ func CountWordsAndImages(url string) (words, images int, err error) {
 
 在Go的错误处理中，错误是软件包API和应用程序用户界面的一个重要组成部分，程序运行失败仅被认为是几个预期的结果之一。如果导致失败的原因只有一个，额外的返回值可以是一个布尔值，通常被命名为ok，例如缓存查找场景：`value, ok := cache.Lookup(key)`, 而如果导致失败的原因不止一种，尤其是对I/O操作而言，用户需要了解更多的错误信息。因此，额外的返回值不再是简单的布尔类型，而是error类型。
 
-内置的error是接口类型
+内置的error是接口类型, 对于non-nil的error类型，我们可以通过调用error的Error函数或者输出函数获得字符串类型的错误信息。
+
+常见的错误处理策略:
+
+1. 最常见的处理方式：传播错误。这意味着函数中某个子程序的失败，会变成该函数的失败。
+
+```go
+resp, err := http.Get(url)
+if err != nil{
+    return nil, err
+}
+doc, err := html.Parse(resp.Body)
+resp.Body.Close()
+if err != nil {
+    // 一些情况喜爱最好将错误的上下文信息也一起带回
+    return nil, fmt.Errorf("parsing %s as HTML: %v", url,err)
+}
+```
+
+2. 对于偶然发生的错误或是不可预知的问题导致的，一般是选择重试。
+3. 错误发生程序无法继续运行时，选择输出错误信息并结束程序。
+
+```go
+if err := WaitForServer(url); err != nil {
+    log.Fatalf("Site is down: %v\n", err)
+    // fmt.Fprintf(os.Stderr, "Site is down: %v\n", err)
+    os.Exit(1)
+}
+```
+
+4. 仅打印错误信息，不中断实行。通常使用 `log.Printf("xxx", err)` 或者 `fmt.Fprinf(os.Stderr, "xxx")`
+5. 忽略错误
+
+文件结尾错误EOF: io包保证任何由文件结束引起的读取失败都返回同一个错误——io.EOF，该错误在io包中定义。
+
+```go
+in := bufio.NewReader(os.Stdin)
+for {
+    r, _, err := in.ReadRune()
+    if err == io.EOF {
+        break // finished reading
+    }
+    if err != nil {
+        return fmt.Errorf("read failed:%v", err)
+    }
+    // ...use r…
+}
+```
+
+### 函数值
+
+函数被看作第一类值（first-class values）：函数像其他值一样，拥有类型，可以被赋值给其他变量，传递给函数，从函数返回。
+
+```go
+func square(n int) int { return n * n }
+func negative(n int) int { return -n }
+
+var f func(int) int
+f = square
+f(3)
+f = negetive
+```
+
+### 匿名函数
+
+
+### 可变参数
+
+在声明可变参数函数时，需要在参数列表的最后一个参数类型之前加上省略符号 `...`。调用者隐式的创建一个数组，并将原始参数复制到数组中，再把数组的一个切片作为参数传给被调用函数。如果原始参数已经是切片类型，只需要在最后一个参数加上省略符号。
+
+```go
+func sum(vals ...int) int {
+    total := 0
+    for _, val := range vals {
+        total += val
+    }
+    return total
+}
+sum(1, 2, 3, 4)
+values := []int{1, 2, 3, 4}
+fmt.Println(sum(values...))
+```
+
+> 可变参数函数和以切片作为参数的函数是不同的。, 也就是说：`func f(...int) {}`, `func g([]int) {}`。
 
 # 面向对象
 

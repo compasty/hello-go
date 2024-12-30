@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -24,6 +25,36 @@ func gcd(x, y int) int {
 		x, y = y, x%y
 	}
 	return x
+}
+
+func topoSort(m map[string][]string) []string {
+	var order []string
+	seen := make(map[string]bool)
+	var visitAll func(items []string)
+	visitAll = func(items []string) {
+		for _, item := range items {
+			if !seen[item] {
+				seen[item] = true
+				visitAll(m[item])
+				order = append(order, item)
+			}
+		}
+	}
+	var keys []string
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	visitAll(keys)
+	return order
+}
+
+func sumInts(vals ...int) int {
+	total := 0
+	for _, val := range vals {
+		total += val
+	}
+	return total
 }
 
 func main() {
@@ -68,4 +99,26 @@ func main() {
 		fmt.Printf("%d\t%c\n", i, r)
 		i += size
 	}
+	// 拓扑排序
+	var prereqs = map[string][]string{
+		"algorithms": {"data structures"},
+		"calculus":   {"linear algebra"},
+		"compilers": {
+			"data structures",
+			"formal languages",
+			"computer organization",
+		},
+		"data structures":       {"discrete math"},
+		"databases":             {"data structures"},
+		"discrete math":         {"intro to programming"},
+		"formal languages":      {"discrete math"},
+		"networks":              {"operating systems"},
+		"operating systems":     {"data structures", "computer organization"},
+		"programming languages": {"data structures", "computer organization"},
+	}
+	for i, course := range topoSort(prereqs) {
+		fmt.Printf("%d:\t%s\n", i+1, course)
+	}
+	// 可变参数
+	fmt.Println("sumInts(1, 2, 3, 4, 5) = ", sumInts(1, 2, 3, 4, 5))
 }
