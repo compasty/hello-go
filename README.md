@@ -371,7 +371,37 @@ func name(parameter-list) (result-list) {
 
 函数的类型被称为函数的签名。如果两个函数形式参数列表和返回值列表中的变量类型一一对应，那么这两个函数被认为有相同的类型或签名。形参和返回值的变量名不影响函数签名，也不影响它们是否可以以省略参数类型的形式表示。
 
-在GO中，函数支持多返回值。
+在GO中，函数支持多返回值, 最常见的就是返回想要的结果和错误信息，例如: `func findLinks(url string) ([]string, error) {}`。在多返回值时，准确的变量名可以传达函数返回值的含义，尤其在返回值的类型都相同时。
+
+```go
+func Size(rect image.Rectangle) (width, height int)
+func Split(path string) (dir, file string)
+```
+
+如果一个函数所有的返回值都有显式的变量名，那么该函数的return语句可以省略操作数。这称之为bare return。
+
+```go
+func CountWordsAndImages(url string) (words, images int, err error) {
+    resp, err := http.Get(url)
+    if err != nil {
+        return
+    }
+    doc, err := html.Parse(resp.Body)
+    resp.Body.Close()
+    if err != nil {
+        err = fmt.Errorf("parsing HTML: %s", err)
+        return
+    }
+    words, images = countWordsAndImages(doc)
+    return
+}
+```
+
+## 错误处理
+
+在Go的错误处理中，错误是软件包API和应用程序用户界面的一个重要组成部分，程序运行失败仅被认为是几个预期的结果之一。如果导致失败的原因只有一个，额外的返回值可以是一个布尔值，通常被命名为ok，例如缓存查找场景：`value, ok := cache.Lookup(key)`, 而如果导致失败的原因不止一种，尤其是对I/O操作而言，用户需要了解更多的错误信息。因此，额外的返回值不再是简单的布尔类型，而是error类型。
+
+内置的error是接口类型
 
 # 面向对象
 

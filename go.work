@@ -17,4 +17,5 @@ use (
     ./randoms
     ./functions
     ./times
+    ./templates
 )
