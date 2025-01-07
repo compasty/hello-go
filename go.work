@@ -20,4 +20,5 @@ use (
     ./templates
     ./github
     ./sorts
+    ./logs
 )
