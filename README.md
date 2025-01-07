@@ -464,8 +464,7 @@ f(3)
 f = negetive
 ```
 
-### 匿名函数
-
+函数类型的零值是nil，函数值可以和nil比较，不能相互比较。
 
 ### 可变参数
 
@@ -485,6 +484,131 @@ fmt.Println(sum(values...))
 ```
 
 > 可变参数函数和以切片作为参数的函数是不同的。, 也就是说：`func f(...int) {}`, `func g([]int) {}`。
+
+可变参数函数常被用于格式化字符串，函数名的后缀f是一种通用的命名规范，代表该可变参数函数可以接收Printf风格的格式化字符串。
+
+```go
+func errorf(linenum int, format string, args ...interface{}) {
+    fmt.Fprintf(os.Stderr, "Line %d: ", linenum)
+    fmt.Fprintf(os.Stderr, format, args...)
+    fmt.Fprintln(os.Stderr)
+}
+```
+
+### Deferred函数
+
+当我们获取网页并进行处理的时候，要保证处理的每条链路（如解析异常、类型不对，甚至运行失败）等都关闭了网络连接，随着逻辑复杂维护越来越困难。此时便可以借助defer机制。
+
+当我们在调用方法时加上关键字`defer`, 这样当包含该defer语句的函数执行完毕时，defer后的函数才会被执行，不论包含defer语句的函数是通过return正常结束，还是由于panic导致的异常结束。 你可以在一个函数中执行多条defer语句，它们的**执行顺序与声明顺序相反**。
+
+`defer`语句常用来处于成对的操作，如打开/关闭，加锁/释放锁等，来保障资源被释放。
+
+```go
+resp, err := http.Get(url)
+if err != nil {
+    return err
+}
+defer resp.Body.Close()
+
+func lookup(key string) int {
+    mu.Lock()
+    defer mu.Unlock()
+    return m[key]
+}
+```
+
+调试复杂程序的时候，defer机制常用于记录何时进入和退出函数。
+
+```go
+func bigSlowOperation() {
+    defer trace("bigSlowOperation")() // don't forget the extra parentheses
+    // ...lots of work…
+    time.Sleep(10 * time.Second) // simulate slow operation by sleeping
+}
+func trace(msg string) func() {
+    start := time.Now()
+    log.Printf("enter %s", msg)
+    return func() { 
+        log.Printf("exit %s (%s)", msg,time.Since(start)) 
+    }
+}
+```
+
+defer语句中的函数会在return语句更新返回值变量后再执行，又因为在函数中定义的匿名函数可以访问该函数包括返回值变量在内的所有变量，所以，对匿名函数采用defer机制，可以使其观察函数的返回值，甚至可以修改函数的返回值
+
+```go
+func double0(x int) (result int) {
+    defer func() { fmt.Printf("double(%d) = %d\n", x,result) }()
+    return x + x
+}
+_ = double0(4)
+// 输出double(4)=8
+func triple(x int) (result int) {
+defer func() { result += x }()
+return double(x)
+}
+fmt.Println(triple(4)) // "12"
+```
+
+注意：defer语句是在函数执行完毕时才执行，对于循环的情况一定要注意资源的利用。
+```go
+for _, filename := range manyfilenames {
+    f, err := os.Open(filename)
+    if err != nil {
+        return err
+    }
+    defer f.Close() // NOTE: risky; could run out of file descriptors
+    // ...process f…
+}
+// modification
+for _, filename := range filenames {
+    if err := doFile(filename); err != nil {
+        return err
+    }
+}
+func doFile(filename string) error {
+    f, err := os.Open(filename)
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+    // ...process f…
+}
+```
+
+### panic & recover
+
+运行时错误会引起panic异常。 当panic异常发生时，程序会中断运行，并立即执行在该goroutine中被延迟的函数（defer 机制）。 随后，程序崩溃并输出日志信息。日志信息包括panic value和函数调用的堆栈跟踪信息。panic value通常是某种错误信息。对于每个goroutine，日志信息中都会有与之相对的，发生panic时的函数调用堆栈跟踪信息。
+
+不是所有的panic异常都来自运行时，直接调用内置的panic函数也会引发panic异常；panic函数接受任何值作为参数。
+
+panic由于会引起程序崩溃，建议不要当`Exception`来用，一般用于严重错误，其他的情况如错误的错误、失败的I/O操作等通常建议使用Go的错误机制。
+
+```go
+func Compile(expr string) (*Regexp, error) { /* ... */ }
+func MustCompile(expr string) *Regexp {
+    re, err := Compile(expr)
+    if err != nil {
+        panic(err)
+    }
+    return re
+}
+```
+
+通常，不应该对panic异常做任何处理，但有时我们希望从崩溃中回复或者做一些清理操作，如web服务器清理所有的连接，或者将异常信息反馈到客户端方便调试。
+
+```go
+func Parse(input string) (s *Syntax, err error) {
+    defer func() {
+        if p := recover(); p != nil {
+            err = fmt.Errorf("internal error: %v", p)
+        }
+    }()
+    // ...parser...
+}
+```
+
+recover函数帮助Parse从panic中恢复。在deferred函数内部，panic value被附加到错误信息中；并用err变量接收错误信息，返回给调用者。我们也可以通过调用 `runtime.Stack` 往错误信息中添加完整的堆栈调用信息。
 
 # 面向对象
 
@@ -607,23 +731,113 @@ func (p Point) Distance(q Point) float64 {
 
 上面代码中附加的参数p, 叫做方法的接收器（receiver）。Go语言中不像其他语言使用`this`或者`self`作为接收器，而是可以任意选择名字，但是为了一致性和简短性，通常建议是选择类型的第一个字母。
 
+### 基于指针对象的方法
+
+类似函数，当（1）函数需要更新一个变量或者（2）对象比较大的时候，我们希望减少这种拷贝，就可以考虑使用指针来声明方法。
+
+```go
+// 这里的函数签名是(*Point.ScaleBy) ，注意不要写成*Point.ScaleBy
+func (p *Point) ScaleBy(factor float64) {
+    p.X *= factor
+    p.Y *= factor
+}
+
+```
+
+1. 当类中有一个指针作为接收器的方法，则这个类的所有方法都必须有一个指针接收器
+2. 只有类型（Point）和指向他们的指针(*Point)，才可能是出现在接收器声明里的两种接收器。在声明方法时，如果一个类型名本身是一个指针的话，是不允许其出现在接收器中的。
+
+调用指针接收器的方法, 以下两种方法都是可以的，因为当go识别到方法采用指针作为接收器，会隐式的使用`&p`去调用。需要注意的是，这种简写仅仅适用于”变量“，不能通过一个无法取到地址的接收器来调用指针方法。
+```go
+// 使用指针变量调用指针类型方法
+r := &Point{1,2}
+r.ScaleBy(2)
+// 这样也是可以的
+p = Point{2,3}
+p.ScaleBy(3)
+// error!!
+Point{1, 2}.ScaleBy(2)
+```
+
+反过来，当我们用像`*Point`的指针来调用`Point`的方法，是编译器会帮忙隐式插入`*`操作符。也就是在每一个合法的方法调用表达式中，也就是下面三种情况里的任意一种情况都是可以的：
+
+1. 接收器的实际参数和其形式参数是相同的类型，比如两者都是类型T或者都是类型*T
+2. 接收器实参是类型T，但接收器形参是类型*T，这种情况下编译器会隐式地为我们取变量的地址
+3. 接收器实参是类型*T，形参是类型T。编译器会隐式地为我们解引用，取到指针指向的实际变量
+
+> 1. 如果类型T的所有方法都是用T类型自己来做接收器（而不是*T），那么拷贝这种类型的实例就是安全的；调用他的任何一个方法也就会产生一个值的拷贝，例如: `time.Duration`. 
+> 2. 但是如果一个方法使用指针作为接收器，你需要避免对其进行拷贝，因为这样可能会破坏掉该类型内部的不变性。比如你对 `bytes.Buffer` 对象进行了拷贝，那么可能会引起原始对象和拷贝对象只是别名而已，实际上它们指向的对象是一样的
+
+### 通过嵌入结构体来扩展类型
+
+```go
+type ColoredPoint struct {
+    Point
+    Color color.RGBA
+}
+```
+
+上面的`ColoredPoint`可以直接调用`Point`的方法。用这种方式，内嵌可以使我们定义字段特别多的复杂类型，我们可以将字段先按小类型分组，然后定义小类型的方法，之后再把它们组合起来
+
+> 1. 组合>继承 2. 需要注意和继承的区别是，组合表达的是ColoredPoint看作"has a" Point，而不是"is a" Point，例如调用我们调用 `p.Distance(q) // compile error: cannot use q (ColoredPoint) as Point` 会出异常就是这个原因
+
+在类型中内嵌的匿名字段也可以是一个命名类型的指针，此时字段和方法会被间接地引入到当前的类型中（访问需要通过该指针指向的对象去取）。添加这一层间接关系让我们可以共享通用的结构并动态地改变对象之间的关系。
+
+```go
+type ColoredPoint struct {
+    *Point
+    Color color.RGBA
+}
+
+p := ColoredPoint{&Point{1, 1}, red}
+q := ColoredPoint{&Point{5, 4}, blue}
+
+q.Point = p.Point                 // p and q now share the same Point
+p.ScaleBy(2)
+fmt.Println(*p.Point, *q.Point) // "{2 2} {2 2}"
+```
+
+### 方法值和方法表达器
+
+一个将对象的方法绑定到特定接收器变量的函数，称为方法值，这个函数可以不通过指定其接收器即可被调用（因为前文中已经指定过了），只需要传入参数。
+
+```go
+p := Point{1, 2}
+q := Point{4, 6}
+
+distanceFromP := p.Distance        // method value
+fmt.Println(distanceFromP(q))      // "5"
+
+type Rocket struct { /* ... */ }
+func (r *Rocket) Launch() { /* ... */ }
+r := new(Rocket)
+// 等价于time.AfterFunc(10 * time.Second, func() { r.Launch() })
+time.AfterFunc(10 * time.Second, r.Launch)
+```
+
+### 封装
+
+一个对象的变量或者方法如果对调用方是不可见的话，一般就被定义为“封装”。好处是：（1）避免调用方直接修改对象的变量值（2）隐藏实现的细节。Go语言只有一种控制可见性的手段：大写首字母的标识符会从定义它们的包中被导出，小写字母的则不会。
+
+这种基于名字的手段使得在语言中**最小的封装单元是package**，而不是像其它语言一样的类型。一个struct类型的字段对同一个包的所有代码都有可见性，无论你的代码是写在一个函数还是一个方法里。
+
+只用来访问或修改内部变量的函数被称为setter或者getter，例子如下，比如log包里的Logger类型对应的一些函数。在命名一个getter方法时，我们通常会省略掉前面的Get前缀。这种简洁上的偏好也可以推广到各种类型的前缀比如Fetch，Find或者Lookup。
+
+```go
+type Logger struct {
+    flags  int
+    prefix string
+    // ...
+}
+func (l *Logger) Flags() int
+func (l *Logger) SetFlags(flag int)
+func (l *Logger) Prefix() string
+func (l *Logger) SetPrefix(prefix string)
+```
+
 # 接口
 
 GO语言提供了接口类型，这是一种抽
-
-# GO并发基础
-
-## goroutines && channels
-GO并发推荐使用“顺序通信进程”（communicating sequential processes， CSP），CSP是一种现代的并发编程模型，在这种模型中值会在不同的运行实例（goroutine）中传递。 
-
-GO语言中每一个并发的执行单元叫作一个goroutine。当一个程序启动时，其主函数即在一个单独的goroutine中运行，我们叫它**main goroutine**。新的goroutine会用go语句来创建。在语法上，go语句是一个普通的函数或方法调用前加上关键字go。go语句会使其语句中的函数在一个新创建的goroutine中运行。而go语句本身会迅速地完成。
-
-```go
-f()    // call f(); wait for it to return
-go f() // create a new goroutine that calls f(); don't wait
-```
-
-主函数返回时，所有的goroutine都会被直接打断，程序退出。除了 **从主函数退出或者直接终止程序**之外，没有其它的编程方法能够让一个goroutine来打断另一个的执行。
 
 # 泛型
 
@@ -707,7 +921,6 @@ func TestIsPalindrome(t *testing.T) {
 Go语言提供了一种机制，能够在运行时更新变量和检查它们的值、调用它们的方法和它们支持的内在操作，而不需要在编译时就知道这些变量的具体类型。这种机制被称为反射。反射是由 `reflect`包提供的，定义了两个重要类型: `Type` 和 `Value`。一个`Type`表示一个Go类型。它是一个接口，有许多方法来区分类型以及检查它们的组成部分，例如一个结构体的成员或一个函数的参数等。唯一能反映 `reflect.Type` 实现的是接口的类型描述信息，也正是这个实体标识了接口值的动态类型。
 
 函数 `reflect.TypeOf` 接受任意的 `interface{}` 类型，并以 `reflect.Type` 形式返回其动态类型
-
 
 # 模块管理
 

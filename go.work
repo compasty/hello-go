@@ -17,7 +17,6 @@ use (
     ./randoms
     ./functions
     ./times
-    ./templates
     ./github
     ./sorts
     ./logs
