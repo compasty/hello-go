@@ -837,7 +837,157 @@ func (l *Logger) SetPrefix(prefix string)
 
 # 接口
 
-GO语言提供了接口类型，这是一种抽
+## 接口基础
+
+GO语言提供了接口类型，这是一种抽象类型，不会暴露出它所代表的对象的内部值的结构和这个对象支持的基础操作的集合；它们只会表现出它们自己的方法。例如：`io.Writer`。
+
+```go
+package io
+
+// Writer is the interface that wraps the basic Write method.
+type Writer interface {
+    // Write writes len(p) bytes from p to the underlying data stream.
+    // It returns the number of bytes written from p (0 <= n <= len(p))
+    // and any error encountered that caused the write to stop early.
+    // Write must return a non-nil error if it returns n < len(p).
+    // Write must not modify the slice data, even temporarily.
+    //
+    // Implementations must not retain p.
+    Write(p []byte) (n int, err error)
+}
+```
+
+我们可以实现一个新的类型`*ByteCounter`满足这个接口类型，逻辑为：仅仅在丢弃写向它的字节前统计它们的长度。
+
+```go
+type ByteCounter int
+
+func (c *ByteCounter) Write(p []byte) (int, error) {
+    *c += ByteCounter(len(p)) // convert int to ByteCounter
+    return len(p), nil
+}
+
+
+var c ByteCounter
+c.Write([]byte("hello"))
+fmt.Println(c) // "5", = len("hello")
+```
+
+接口类型描述了一系列方法的集合，一个实现了这些方法的具体类型是这个接口类型的实例。`io.Writer`类型是用得最广泛的接口之一，因为它提供了所有类型的写入bytes的抽象，包括文件类型，内存缓冲区，网络链接，HTTP客户端，压缩工具，哈希等等, 类似的还有`io.Reader`, `io.Closer`。
+
+接口之间还可以进行组合(接口内嵌)
+```go
+type ReadWriteCloser interface {
+    Reader
+    Writer
+    Closer
+}
+```
+
+如果一个类型实现了接口的所有方法，那么这个类型就是实现了这个接口。例如：`*os.File`实现了`io.Reader`, `io.Writer`, `io.Closer`接口，实现了接口的类型都是可以给接口类型的变量赋值。
+
+```go
+var w io.Writer
+w = os.Stdout           // OK: *os.File has Write method
+w = new(bytes.Buffer)   // OK: *bytes.Buffer has Write method
+w = time.Second         // compile error: time.Duration lacks Write method
+```
+
+`interface{}`被称为空接口类型，可以给任意值赋给空接口类型。
+
+```go
+var any interface{}
+any = true
+any = map[string]int{"one": 1}
+any = new(bytes.Buffer)
+```
+
+非空的接口类型比如`io.Writer`经常被指针类型实现，尤其当一个或多个接口方法像Write方法那样隐式的给接收者带来变化的时候。一个结构体的指针是非常常见的承载方法的类型。例如：`var w io.Writer = new(bytes.Buffer)`
+
+接口值由两个部分组成，一个具体的类型和那个类型的值，被称为接口的动态类型和动态值。一个接口的零值就是它的类型和值的部分都是`nil`。
+
+![nil interface value](images/interface_value_nil.png)
+
+当一个具体类型的值被赋给接口值变量时，就会调用具体类型到接口类型的隐式转换。例如：`var w io.Writer  w = os.Stdout`, 此时w的动态类型被设为*os.File指针的类型描述符，它的动态值持有os.Stdout的拷贝；这是一个代表处理标准输出的os.File类型变量的指针。
+
+接口值可以使用==和!＝来进行比较。两个接口值相等仅当它们都是nil值，或者它们的动态类型相同并且动态值也根据这个动态类型的==操作相等（也就是要求动态类型可比，例如切片这种不可比较的就不能对应持有的接口值）。因为接口值是可比较的，所以它们可以用在map的键或者作为switch语句的操作数。
+
+## 一些常见的接口
+
+`sort.Interface`接口: sort包内置的提供了根据一些排序函数来对任何序列排序的功能。但比较神奇的是：Go语言的`sort.Sort`函数不会对具体的序列和它的元素做任何假设。相反，它使用了一个接口类型sort.Interface来指定通用的排序算法和可能被排序到的序列类型之间的约定。这个接口的实现由序列的具体表示和它希望排序的元素决定，序列的表示经常是一个切片。
+
+```go
+package sort
+
+type Interface interface {
+    Len() int
+    Less(i, j int) bool // i, j are indices of sequence elements
+    Swap(i, j int)
+}
+
+type StringSlice []string
+func (p StringSlice) Len() int           { return len(p) }
+func (p StringSlice) Less(i, j int) bool { return p[i] < p[j] }
+func (p StringSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+```
+
+`error`是一个interface类型，这个类型有一个返回错误信息的单一方法。
+
+```go
+type error interface {
+    Error() string
+}
+```
+
+创建一个error最简单的方法就是调用 `errors.New`方法，根据传入的错误信息返回一个新的error。这里承载`errorString`的类型是一个结构体而不是一个字符串，是为了防止被更新。并且因为是指针类型 `*errorString`满足error接口而非errorString类型，所以每个New函数的调用都分配了一个独特的和其他错误不相同的实例。我们也不想要重要的error例如 `io.EOF`和一个刚好有相同错误消息的error比较后相等
+
+```go
+package errors
+func New(text string) error { return &errorString{text} }
+type errorString struct { text string }
+func (e *errorString) Error() string { return e.text }
+
+
+fmt.Println(errors.New("EOF") == errors.New("EOF")) // "false"
+```
+
+另外更常见的创建错误的方法是使用 `fmt.Errorf`。
+
+```go
+func Errorf(format string, args ...interface{}) error {
+    return errors.New(Sprintf(format, args...))
+}
+```
+
+`syscall`包提供了Go语言底层系统API，它定义一个实现error接口的数字类型Errno，并且在Unix平台上，Errno的Error方法会从一个字符串表中查找错误消息。
+
+```go
+type Errno uintptr // operating system error code
+
+var errors = [...]string{
+    1:   "operation not permitted",   // EPERM
+    2:   "no such file or directory", // ENOENT
+    3:   "no such process",           // ESRCH
+    // ...
+}
+
+func (e Errno) Error() string {
+    if 0 <= int(e) && int(e) < len(errors) {
+        return errors[e]
+    }
+    return fmt.Sprintf("errno %d", e)
+}
+
+var err error = syscall.Errno(2)
+fmt.Println(err.Error()) // "no such file or directory"
+```
+
+
+## 类型断言
+
+类型断言是一个使用在接口值上的操作，语法上类似`x.(T)`，其中x表示接口的类型，T表示一个类型。一个类型断言检查它操作对象的动态类型是否和断言的类型匹配。如果检查成功，结果是x的动态值，如果检查失败抛出panic。
+
+
 
 # 泛型
 
@@ -927,3 +1077,24 @@ Go语言提供了一种机制，能够在运行时更新变量和检查它们的
 ## 工作区
 
 Go在1.18+版本后开始支持工作区Workspace模式，
+
+# 其他
+
+## make&new
+
+`make`和`new`都可以初始化变量，但有很多不同：
+1. `make`: 初始化内置的数据结构，也就是切片、map和channel
+2. `new`: 根据传入的类型分配一片内存并返回指向这篇内存空间的指针
+
+```go
+slice := make([]int, 0, 100) // 一个包含 data、cap 和 len 的结构体 reflect.SliceHeader
+hash := make(map[int]bool, 10) // 指向 runtime.hmap 结构体的指针
+ch := make(chan int, 5) // 指向 runtime.hchan 结构体的指针
+
+i := new(int)
+
+var v int
+i := &v
+```
+
+
