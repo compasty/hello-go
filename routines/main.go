@@ -6,8 +6,8 @@ import (
 )
 
 func main() {
-	go spinner(200 * time.Millisecond)
-	go fib(40)
+	go spinner(100 * time.Millisecond)
+	go fib(50)
 	time.Sleep(10 * time.Second)
 	fmt.Printf("All done")
 }

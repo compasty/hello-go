@@ -987,6 +987,25 @@ fmt.Println(err.Error()) // "no such file or directory"
 
 类型断言是一个使用在接口值上的操作，语法上类似`x.(T)`，其中x表示接口的类型，T表示一个类型。一个类型断言检查它操作对象的动态类型是否和断言的类型匹配。如果检查成功，结果是x的动态值，如果检查失败抛出panic。
 
+```go
+var w io.Writer
+w = os.Stdout
+f := w.(*os.File)      // success: f == os.Stdout
+c := w.(*bytes.Buffer) // panic: interface holds *os.File, not *bytes.Buffer
+```
+
+经常地，对一个接口值的动态类型我们是不确定的，并且我们更愿意去检验它是否是一些特定的类型。如果类型断言出现在一个预期有两个结果的赋值操作中。例如如下的定义，这个操作不会在失败的时候发生panic，但是替代地返回一个额外的第二个结果，这个结果是一个标识成功与否的布尔值：
+
+```go
+var w io.Writer = os.Stdout
+f, ok := w.(*os.File)      // success:  ok, f == os.Stdout
+b, ok := w.(*bytes.Buffer) // failure: !ok, b == nil
+
+if f, ok := w.(*os.File); ok {
+    // ...use f...
+}
+```
+
 
 
 # 泛型
