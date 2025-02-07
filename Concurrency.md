@@ -10,6 +10,33 @@ f()    // call f(); wait for it to return
 go f() // create a new goroutine that calls f(); don't wait
 ```
 
+下面的示例程序会在动画显示几秒后，fib(45)调用会成功返回并打印结果。
+
+```go
+func main() {
+    go spinner(100 * time.Millisecond)
+    const n = 45
+    fibN := fib(n) // slow
+    fmt.Printf("\rFibonacci(%d) = %d\n", n, fibN)
+}
+
+func spinner(delay time.Duration) {
+    for {
+        for _, r := range `-\|/` {
+            fmt.Printf("\r%c", r)
+            time.Sleep(delay)
+        }
+    }
+}
+
+func fib(x int) int {
+    if x < 2 {
+        return x
+    }
+    return fib(x-1) + fib(x-2)
+}
+```
+
 主函数返回时，所有的goroutine都会被直接打断，程序退出。除了 **从主函数退出或者直接终止程序**之外，没有其它的编程方法能够让一个goroutine来打断另一个的执行。
 
 ## channel基础
@@ -116,7 +143,6 @@ func (*emptyCtx) Value(key interface{}) interface{} {
 
 ### 传值方法
 
-
 # 基于共享变量的并发
 
 大部分的类型都不是并发安全（并发安全的类型是例外，而不是规则），所以应该尽量避免并发访问大多数的类型，无论是将变量局限在单一的一个goroutine内，还是用互斥条件维持更高级别的不变性，都是为了这个目的。一个函数在并发调用时没法工作的原因太多了，比如死锁（deadlock）、活锁（livelock）和饿死（resource starvation），通常我们最关注的是竞争条件。竞争条件指的是程序在多个goroutine交叉执行操作时，没有给出正确的结果。
@@ -135,3 +161,90 @@ x[999999] = 1 // NOTE: undefined behavior; memory corruption possible!
 1. 避免写操作，类似`final`变量
 2. 避免从多个goroutine访问变量，比如仅允许一个go routine去操作变量，其他go routine使用channel来查询更新变量（即通信代替共享）。一个提供对一个指定的变量通过channel来请求的goroutine叫做这个变量的monitor（监控）goroutine
 3. 允许多go routine, 但是同一时刻只有一个可以访问（互斥）
+
+## Mutex & RWMutex
+
+使用互斥最方便的方法就是利用`sync.Mutex`, 然后使用`Lock`方法加锁以及`Unlock`方法释放锁。在Lock和Unlock之间的代码段中的内容goroutine可以随便读取或者修改，这个代码段叫做临界区。锁的持有者在其他goroutine获取该锁之前需要调用Unlock。
+
+> 要确保无论哪条路径通过函数都要释放锁，即使是异常状态下。所以通常在`Lock`方法，立即调用`defer Unlock`
+
+考虑一个下面的例子，我们应该如何基于这两个函数实现`Withdrawal`函数
+```go
+func Deposit(amount int) {
+	mu.Lock()
+	defer mu.Unlock()
+	balance = balance + amount
+}
+
+func Balance() int {
+	mu.Lock()
+	defer mu.Unlock()
+	return balance
+}
+```
+
+下面是两种常见的错误写法：
+```go
+// NOTE: not atomic! 会产生小于0的余额
+func Withdraw(amount int) bool {
+    Deposit(-amount)
+    if Balance() < 0 {
+        Deposit(amount)
+        return false // insufficient funds
+    }
+    return true
+}
+
+// NOTE: incorrect!
+func Withdraw(amount int) bool {
+    mu.Lock()
+    defer mu.Unlock()
+	// 错误，无法二次加锁
+    Deposit(-amount)
+    if Balance() < 0 {
+        Deposit(amount)
+        return false // insufficient funds
+    }
+    return true
+}
+```
+
+> `sync.Mutex` 是不可重入的
+
+```go
+func Withdraw(amount int) bool {
+    mu.Lock()
+    defer mu.Unlock()
+    deposit(-amount)
+    if balance < 0 {
+        deposit(amount)
+        return false // insufficient funds
+    }
+    return true
+}
+
+func Deposit(amount int) {
+    mu.Lock()
+    defer mu.Unlock()
+    deposit(amount)
+}
+
+func Balance() int {
+    mu.Lock()
+    defer mu.Unlock()
+    return balance
+}
+
+// This function requires that the lock be held.
+func deposit(amount int) { balance += amount }
+```
+
+允许多个只读操作并行执行，但写操作会完全互斥。这种锁叫作“多读单写”锁（multiple readers, single writer lock），Go语言提供的这样的锁是`sync.RWMutex`。
+
+## 内存同步
+
+在现代计算机中可能会有一堆处理器，每一个都会有其本地缓存（local cache）。为了效率，对内存的写入一般会在每一个处理器中缓冲，并在必要时一起flush到主存。这种情况下这些数据可能会以与当初goroutine写入顺序不同的顺序被提交到主存。像channel通信或者互斥量操作这样的原语会使处理器将其聚集的写入flush并commit，这样goroutine在某个时间点上的执行结果才能被其它处理器上运行的goroutine得到。
+
+更多可以参考:[Memory model](https://go.dev/ref/mem)
+
+## sync.Once惰性初始化
