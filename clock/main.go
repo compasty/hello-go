@@ -1,9 +1,11 @@
 package main
 
 import (
+	"flag"
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -19,7 +21,9 @@ func handleConn(conn net.Conn) {
 }
 
 func main() {
-	listener, err := net.Listen("tcp", "localhost:8234")
+	port := flag.Int("port", 8080, "port to listen on")
+	flag.Parse()
+	listener, err := net.Listen("tcp", "localhost:"+strconv.Itoa(*port))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -29,7 +33,7 @@ func main() {
 			log.Println(err) // e.g. connection aborted
 			continue
 		}
-		handleConn(conn)
+		// handle connection concurrently
+		go handleConn(conn)
 	}
-
 }
